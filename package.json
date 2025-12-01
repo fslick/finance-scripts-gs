@@ -1,0 +1,16 @@
+{
+  "name": "js-project",
+  "version": "1.0.0",
+  "description": "A simple Hello World JavaScript project",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["hello-world", "javascript", "node"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "sync-request": "^6.1.0"
+  }
+}
