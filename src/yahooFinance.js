@@ -9,8 +9,8 @@ let __fetchJsonFromYF = (yahooSymbol, monthsAgo) => {
 
     // Five years ago 
     const defaultDaysAgo = 5 * 365 + 5;
-    const ago = monthsAgo 
-        ? new Date(now.getFullYear(), now.getMonth() - monthsAgo, now.getDate()) 
+    const ago = monthsAgo
+        ? new Date(now.getFullYear(), now.getMonth() - monthsAgo, now.getDate())
         : new Date(now.getTime() - defaultDaysAgo * 24 * 60 * 60 * 1000);
     const period1 = Math.floor(ago.getTime() / 1000);
 
@@ -115,6 +115,13 @@ let __closeAt = (targetDate, quotes) => {
 
     return result >= 0 ? quotes[result].close : undefined;
 };
+
+let FETCH_QUOTE = (yahooSymbol) => {
+    const json = __fetchJsonFromYF(yahooSymbol, 1);
+    const quotes = __parseJsonWithQuotes(json);
+    const lastQuote = quotes[quotes.length - 1];
+    return lastQuote.close;
+}
 
 let FETCH_QUOTES = (yahooSymbol, monthsAgo) => {
     const json = __fetchJsonFromYF(yahooSymbol, monthsAgo);
