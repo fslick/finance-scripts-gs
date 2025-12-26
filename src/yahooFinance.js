@@ -1,18 +1,15 @@
-let __fetchJsonFromYF = (yahooSymbol, monthsAgo) => {
+let __fetchJsonFromYF = async (yahooSymbol) => {
     if (!yahooSymbol) {
         throw new Error("yahooSymbol is required");
     }
 
-    // Current time (in seconds since Unix epoch)
     const now = new Date();
     const period2 = Math.floor(now.getTime() / 1000);
 
-    // Five years ago 
-    const defaultDaysAgo = 5 * 365 + 5;
-    const ago = monthsAgo
-        ? new Date(now.getFullYear(), now.getMonth() - monthsAgo, now.getDate())
-        : new Date(now.getTime() - defaultDaysAgo * 24 * 60 * 60 * 1000);
-    const period1 = Math.floor(ago.getTime() / 1000);
+    // 61 months ago (approx 5 years + 1 month)
+    const monthsAgo = 61;
+    const fromDate = new Date(now.getFullYear(), now.getMonth() - monthsAgo, now.getDate());
+    const period1 = Math.floor(fromDate.getTime() / 1000);
 
     // Build URL
     const baseUrl = "https://query1.finance.yahoo.com/v8/finance/chart/";
@@ -32,18 +29,9 @@ let __fetchJsonFromYF = (yahooSymbol, monthsAgo) => {
     ].join("&");
 
     const url = baseUrl + symbolPath + "?" + params;
-    Logger.log("url: " + url);
+    const text = await Http.get(url);
 
-    // Fetch raw JSON
-    const response = Http.get(url);
-
-    const statusCode = response.getResponseCode();
-    if (statusCode < 200 || statusCode >= 300) {
-        throw new Error("HTTP error " + statusCode + " from Yahoo Finance: " + response.getContentText());
-    }
-
-    const jsonText = response.getContentText();
-    return JSON.parse(jsonText);
+    return JSON.parse(text);
 };
 
 let __normalizeDate = (d) => {
@@ -116,16 +104,30 @@ let __closeAt = (targetDate, quotes) => {
     return result >= 0 ? quotes[result].close : undefined;
 };
 
-let FETCH_QUOTE = (yahooSymbol) => {
-    const json = __fetchJsonFromYF(yahooSymbol, 1);
+let PRICE_OF = async (yahooSymbol, date) => {
+    const json = await __fetchJsonFromYF(yahooSymbol);
     const quotes = __parseJsonWithQuotes(json);
-    const lastQuote = quotes[quotes.length - 1];
-    return lastQuote.close;
+
+    const targetDate = date ? __normalizeDate(date) : __normalizeDate(new Date());
+    const cached = Cache.get(yahooSymbol + ":" + targetDate.toISOString());
+    if (cached !== null) {
+        return cached ? Number(cached) : cached;
+    }
+
+    const close = __closeAt(targetDate, quotes);
+    Cache.put(yahooSymbol + ":" + targetDate.toISOString(), close ? close.toString() : null);
+    return close ? Number(close) : close;
 }
 
-let FETCH_QUOTES = (yahooSymbol, monthsAgo) => {
-    const json = __fetchJsonFromYF(yahooSymbol, monthsAgo);
-    const quotes = __parseJsonWithQuotes(json);
+let FETCH_QUOTES = async (yahooSymbol, monthsAgo) => {
+    const json = await __fetchJsonFromYF(yahooSymbol);
+    let quotes = __parseJsonWithQuotes(json);
+
+    if (monthsAgo) {
+        const now = new Date();
+        const cutoffDate = __normalizeDate(new Date(now.getFullYear(), now.getMonth() - monthsAgo, now.getDate()));
+        quotes = quotes.filter(q => q.date >= cutoffDate);
+    }
     const arrays = quotes.map(q => [q.date, q.close]);
     return [
         ["Date", "Close"],
@@ -133,8 +135,8 @@ let FETCH_QUOTES = (yahooSymbol, monthsAgo) => {
     ];
 };
 
-let GET_PERFORMANCES = (yahooSymbol) => {
-    const json = __fetchJsonFromYF(yahooSymbol);
+let GET_PERFORMANCES = async (yahooSymbol) => {
+    const json = await __fetchJsonFromYF(yahooSymbol);
     const quotes = __parseJsonWithQuotes(json);
     const now = new Date();
     const targetDates = [
@@ -164,6 +166,7 @@ if (typeof global !== 'undefined') {
     global.__parseJsonWithQuotes = __parseJsonWithQuotes;
     global.__closeBefore = __closeBefore;
     global.__closeAt = __closeAt;
+    global.PRICE_OF = PRICE_OF;
     global.FETCH_QUOTES = FETCH_QUOTES;
     global.GET_PERFORMANCES = GET_PERFORMANCES;
 }

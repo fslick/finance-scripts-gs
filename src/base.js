@@ -1,8 +1,7 @@
 class Http {
-    static get(url) {
-        const syncRequest = require('sync-request');
-        const response = syncRequest('GET', url);
-        return JSON.parse(response.getBody('utf8'));
+    static async get(url) {
+        const response = await fetch(url);
+        return await response.text();
     }
 }
 
@@ -11,3 +10,22 @@ class Logger {
         console.log(message);
     }
 }
+
+const cache = new Map();
+
+class Cache {
+    static get(key) {
+        if (!cache.has(key)) {
+            return null;
+        }
+        return cache.get(key);
+    }
+
+    static put(key, value) {
+        cache.set(key, value);
+    }
+}
+
+global.Http = Http;
+global.Logger = Logger;
+global.Cache = Cache;
