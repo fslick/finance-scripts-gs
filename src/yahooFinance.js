@@ -1,17 +1,19 @@
-let __fetchJsonFromYF = async (yahooSymbol) => {
+const __fetchJsonFromYF = async (yahooSymbol, fromDate, toDate) => {
     if (!yahooSymbol) {
         throw new Error("yahooSymbol is required");
     }
 
+    if (!(fromDate instanceof Date) && toDate instanceof Date) {
+        throw new Error("fromDate must be a Date if toDate is provided");
+    }
+
     const now = new Date();
-    const period2 = Math.floor(now.getTime() / 1000);
+    const defaultFromDate = new Date(now.getFullYear(), now.getMonth() - 61, now.getDate());
+    const defaultToDate = new Date();
 
-    // 61 months ago (approx 5 years + 1 month)
-    const monthsAgo = 61;
-    const fromDate = new Date(now.getFullYear(), now.getMonth() - monthsAgo, now.getDate());
-    const period1 = Math.floor(fromDate.getTime() / 1000);
+    const period1 = Math.floor(fromDate ? fromDate.getTime() / 1000 : defaultFromDate.getTime() / 1000);
+    const period2 = Math.floor(toDate ? toDate.getTime() / 1000 : defaultToDate.getTime() / 1000);
 
-    // Build URL
     const baseUrl = "https://query1.finance.yahoo.com/v8/finance/chart/";
     const symbolPath = encodeURIComponent(yahooSymbol);
 
@@ -34,7 +36,7 @@ let __fetchJsonFromYF = async (yahooSymbol) => {
     return JSON.parse(text);
 };
 
-let __normalizeDate = (d) => {
+const __normalizeDate = (d) => {
     // Normalize any Date-like input to 00:00:00 UTC for that calendar day
     const raw = new Date(d);
     return new Date(Date.UTC(
@@ -44,7 +46,7 @@ let __normalizeDate = (d) => {
     ));
 };
 
-let __parseJsonWithQuotes = (json) => {
+const __parseJsonWithQuotes = (json) => {
     const timestamps = json.chart.result[0].timestamp;
     const closePrices = json.chart.result[0].indicators.quote[0].close;
     if (timestamps.length !== closePrices.length) {
@@ -65,7 +67,7 @@ let __parseJsonWithQuotes = (json) => {
     return zipped;
 };
 
-let __closeBefore = (targetDate, quotes) => {
+const __closeBefore = (targetDate, quotes) => {
     // Normalize targetDate to 00:00:00 UTC for comparison
     const normalized = __normalizeDate(targetDate);
     // Binary search for the last quote with date < targetDate
@@ -83,7 +85,7 @@ let __closeBefore = (targetDate, quotes) => {
     return result >= 0 ? quotes[result].close : undefined;
 };
 
-let __closeAt = (targetDate, quotes) => {
+const __closeAt = (targetDate, quotes) => {
     // Normalize targetDate to 00:00:00 UTC for comparison
     const normalized = __normalizeDate(targetDate);
 
@@ -104,30 +106,26 @@ let __closeAt = (targetDate, quotes) => {
     return result >= 0 ? quotes[result].close : undefined;
 };
 
-let PRICE_OF = async (yahooSymbol, date) => {
-    const json = await __fetchJsonFromYF(yahooSymbol);
-    const quotes = __parseJsonWithQuotes(json);
-
-    const targetDate = date ? __normalizeDate(date) : __normalizeDate(new Date());
+const PRICE_OF = async (yahooSymbol, date) => {
+    const targetDate = date ? date : new Date();
     const cached = Cache.get(yahooSymbol + ":" + targetDate.toISOString());
     if (cached !== null) {
         return cached ? Number(cached) : cached;
     }
+
+    const fromDate = new Date(targetDate.getTime() - 5 * 24 * 60 * 60 * 1000);
+    const json = await __fetchJsonFromYF(yahooSymbol, fromDate, targetDate);
+    const quotes = __parseJsonWithQuotes(json);
 
     const close = __closeAt(targetDate, quotes);
     Cache.put(yahooSymbol + ":" + targetDate.toISOString(), close ? close.toString() : null);
     return close ? Number(close) : close;
 }
 
-let FETCH_QUOTES = async (yahooSymbol, monthsAgo) => {
-    const json = await __fetchJsonFromYF(yahooSymbol);
-    let quotes = __parseJsonWithQuotes(json);
+const FETCH_QUOTES = async (yahooSymbol, fromDate, toDate) => {
+    const json = await __fetchJsonFromYF(yahooSymbol, fromDate, toDate);
+    const quotes = __parseJsonWithQuotes(json);
 
-    if (monthsAgo) {
-        const now = new Date();
-        const cutoffDate = __normalizeDate(new Date(now.getFullYear(), now.getMonth() - monthsAgo, now.getDate()));
-        quotes = quotes.filter(q => q.date >= cutoffDate);
-    }
     const arrays = quotes.map(q => [q.date, q.close]);
     return [
         ["Date", "Close"],
@@ -135,7 +133,7 @@ let FETCH_QUOTES = async (yahooSymbol, monthsAgo) => {
     ];
 };
 
-let GET_PERFORMANCES = async (yahooSymbol) => {
+const GET_PERFORMANCES = async (yahooSymbol) => {
     const json = await __fetchJsonFromYF(yahooSymbol);
     const quotes = __parseJsonWithQuotes(json);
     const now = new Date();
