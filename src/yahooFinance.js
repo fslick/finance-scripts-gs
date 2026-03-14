@@ -14,20 +14,18 @@ const __fetchJsonFromYF = async (yahooSymbol, fromDate, toDate) => {
     const period1 = Math.floor(fromDate ? fromDate.getTime() / 1000 : defaultFromDate.getTime() / 1000);
     const period2 = Math.floor(toDate ? toDate.getTime() / 1000 : defaultToDate.getTime() / 1000);
 
-    const baseUrl = "https://query1.finance.yahoo.com/v8/finance/chart/";
+    const baseUrl = "https://query2.finance.yahoo.com/v8/finance/chart/";
     const symbolPath = encodeURIComponent(yahooSymbol);
 
     const params = [
-        "events=" + encodeURIComponent("capitalGain|div|split"),
-        "formatted=true",
-        "includeAdjustedClose=true",
         "interval=1d",
         "period1=" + period1,
         "period2=" + period2,
-        "symbol=" + encodeURIComponent(yahooSymbol),
-        "userYfid=true",
+        "includePrePost=false",
+        "events=" + encodeURIComponent("div|split|earn"),
         "lang=en-US",
-        "region=US"
+        "region=US",
+        "source=cosaic"
     ].join("&");
 
     const url = baseUrl + symbolPath + "?" + params;
@@ -52,19 +50,19 @@ const __parseJsonWithQuotes = (json) => {
     if (timestamps.length !== closePrices.length) {
         throw new Error('Timestamps and close prices length mismatch');
     }
-    const zipped = timestamps
+    const quotesByDate = new Map();
+    timestamps
         .map((ts, i) => ({ timestamp: ts, close: closePrices[i] }))
         .filter(item => item.timestamp != null && item.close != null)
-        .map(item => {
+        .forEach(item => {
             const raw = new Date(item.timestamp * 1000);
             const date = __normalizeDate(raw);
-            return {
+            quotesByDate.set(date.toISOString(), {
                 date,
                 close: item.close,
-                // timestamp: item.timestamp
-            };
+            });
         });
-    return zipped;
+    return Array.from(quotesByDate.values()).sort((a, b) => a.date - b.date);
 };
 
 const __closeBefore = (targetDate, quotes) => {

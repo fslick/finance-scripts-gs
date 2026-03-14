@@ -1,6 +1,7 @@
 {
   "name": "finance-scripts-gs",
   "version": "1.0.0",
+  "type": "module",
   "description": "Finance scripts for Google Sheets",
   "main": "index.js",
   "scripts": {
